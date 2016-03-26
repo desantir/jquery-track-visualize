@@ -23,8 +23,7 @@
 
         $(function () {
             $("#c1").track_visualize_control({
-                height: 200,
-                width: 1200,
+                height: 150,
                 onchange: function (location) {
                     ;
                 }
@@ -36,8 +35,7 @@
 
 <body style="background-color:white;">
 
-    <div style="border: 1px solid black; overflow-x: auto; background-color: yellow;">
-        <div id="c1"></div>
+    <div id="c1" style="border: 1px solid black; overflow-x: auto; background-color: rgba(11, 147, 213, 1); width: 200px; overflow-y: hidden; height: 167px; ">
     </div>
 
     <div style="margin-top: 10px;" >
@@ -57,13 +55,13 @@
     </div>
 
     <div style="margin-top: 10px;">
-        <button onclick='$("#c1").track_visualize_control("begin", 0, 500)'>Auto</button>
+        <button onclick='$("#c1").track_visualize_control("play", 0, 500)'>Play</button>
         <button onclick='$("#c1").track_visualize_control("stop")'>Stop</button>
     </div>
 
     <div style="margin-top: 10px;">
-        <label for="number">Bar #</label><input id="number" value="0" type="text" />
-        <label for="annotation">Annotation</label><input id="annotation" value="YO!" type="text" />
+        <label for="number">Bar #</label><input id="number" value="199" type="text" />
+        <label for="annotation">Annotation</label><input id="annotation" value="Scene 123" type="text" />
         <button onclick='$("#c1").track_visualize_control("annotate", parseInt(number.value), annotation.value)'>Annotate</button>
     </div>
 

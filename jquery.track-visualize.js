@@ -26,65 +26,79 @@ MA 02111-1307, USA.
         pluginName: "track_visualize_control",
 
         BAR_BORDER_SIZE: 1,
-        BAR_BOX_WIDTH: 3,
+        BAR_BOX_WIDTH: 2,
         EDGE_BORDER: 2,
 
         options: {
             onchange: null,
             amplitude_data: [ 0 ],
             height: 200,
-            min_width: 800,
-            bar_border_color: "black",
-            bar_unselected_fill: "cyan",
-            bar_highlight_fill: "blue",
-            bar_selected_fill: "black",
-            background_color: "green",      // "#FFFFFF",
+            min_width: 2000,
+            bar_border_color: "rgb( 0, 0, 255 )",
+            bar_unselected_fill: "rgb( 0, 0, 150 )",
+            bar_highlight_fill: "rgb( 0, 111, 128)",
+            bar_selected_fill: "white",
+            bar_hover_fill: "rgb( 81, 81, 194 )",
+            background_color: "transparent",
             canvas_style: "overflow-x: auto;",
             annotation_color: "white",
             text_color: "white",
-            onclick: null
+            onclick: null,
+            play_callback: null,
+            zoom_percent: .75
         },
 
         // Widget constructor (access with this.element)
         _create: function () {
             var canvas_tag = '<canvas id="track_visualize_canvas" style="' + this.options.canvas_style + '"></canvas>';
-
             this.canvas = $(canvas_tag);
 
-            this.canvas.attr({ height: this.options.height });
+            this.canvas.attr({ height: this.options.height, width: this.options.min_width });
+            this.canvas.height(this.options.height);
 
-            this.canvas.height(this.options.height );
-
-            this.canvas.appendTo(this.element);
+            this.container = $( '<div style="overflow-x: auto; overflow-y: hidden; background-color:transparent; width:100%; height:100%"></div>' );
+            this.canvas.appendTo(this.container);
+            this.container.appendTo(this.element);
 
             var self = this;
             this.canvas.on("mousedown", function (event) { self._on_mouse_down(event); });
-            this.canvas.on("mouseover", function (event) { self._on_mouse_over(event); });
+            this.canvas.on("mousemove", function (event) { self._on_mouse_move(event); });
+            this.canvas.on("mouseout", function (event) { self._on_mouse_out(event); });
         },
 
         _init: function () {
             this.load(this.options.amplitude_data);
         },
 
-        load: function ( amplitude_data ) {
+        load: function (amplitude_data) {
             if (amplitude_data == null)
                 return;
 
             this.options.amplitude_data = amplitude_data;
 
+            this.container.scrollLeft(0);
+
             this.canvasWidth = Math.max( amplitude_data.length * (this.BAR_BOX_WIDTH + this.BAR_BORDER_SIZE) + (this.EDGE_BORDER * 2), this.options.min_width );
 
             this.bars = [];
+            this.max_bar_height = 0;
 
             var x = this.EDGE_BORDER;
 
             for (var i = 0; i < this.options.amplitude_data.length; i++) {
-                var bar_height = (this.options.amplitude_data[i] / 32767.0) * 100;
+                var bar_height = ((this.options.amplitude_data[i] / 32767.0) * 100) * this.options.zoom_percent;
                 var y = this.options.height - bar_height - this.BAR_BORDER_SIZE;
 
-                this.bars[this.bars.length] = { "x": x, "y": y, "height": bar_height, "highlight": false, "selected": false, "annotation": null };
+                this.bars[this.bars.length] = {
+                    "number" : i,
+                    "x": x, "y": y, "height": bar_height,
+                    "highlight": false, "selected": false, hover: false, "annotation": null
+                };
 
                 x += (this.BAR_BOX_WIDTH + this.BAR_BORDER_SIZE);         // Borders overlap - hence 1 border
+
+                if (bar_height > this.max_bar_height+4)
+                    this.max_bar_height = bar_height+4;
             }
 
             this.draw();
@@ -96,8 +110,6 @@ MA 02111-1307, USA.
 
             var ctx = this.canvas.get(0).getContext("2d");
 
-            // ctx.scale(1, 1);
-
             ctx.beginPath();
             ctx.fillStyle = this.options.background_color;
             ctx.lineWidth = 0;
@@ -105,11 +117,14 @@ MA 02111-1307, USA.
             ctx.fill();
             ctx.closePath();
 
-            for (var i = 0; i < this.bars.length; i++)
-                this._paint_bar(ctx, this.bars[i], true);
+            for (var y = 0; y < 2; y++ )
+                for (var i = 0; i < this.bars.length; i++)
+                    this._paint_bar(ctx, this.bars[i], true);
         },
 
-        begin: function ( start_bar, interval_ms ) {
+        play: function (start_bar, interval_ms) {
+            this.stop();
+
             this.highlightLeft( this.bars.length, false );
             if ( start_bar > 0 )
                 this.highlightLeft( start_bar-1, true );
@@ -120,8 +135,15 @@ MA 02111-1307, USA.
         _timer: function( index, interval_ms ) {
             this.highlight( [ index ], true );
 
-            if ( this.bars[index].annotation != null && this.bars[index].annotation.callback != null )
-                this.bars[index].annotation.callback( index );
+            var bar = this.bars[index];
+
+            if (this.play_callback != null && bar.annotation != null)
+                this.play_callback(bar);
+
+            if (this.canvas.width() > this.container.width() &&
+                bar.x >= this.container.width() + this.container.scrollLeft() - (this.BAR_BOX_WIDTH + this.BAR_BORDER_SIZE) ) {
+                this.container.scrollLeft( bar.x - this.container.width()/2 ) ; 
+            }
 
             if ( ++index < this.bars.length ) {
                 var self = this;
@@ -171,14 +193,14 @@ MA 02111-1307, USA.
             }
         },
 
-        annotate: function (bar_number, annotation, callback) {
+        annotate: function (bar_number, label, data ) {
             if (bar_number < 0 || bar_number >= this.bars.length)
                 return;
 
             var ctx = this.canvas.get(0).getContext("2d");
 
             var bar = this.bars[bar_number];
-            bar.annotation = { "annotation": annotation, "callback": callback };
+            bar.annotation = { "label": label, "data": data };
             this.draw();
         },
 
@@ -191,6 +213,8 @@ MA 02111-1307, USA.
 
             if (bar.selected)
                 ctx.fillStyle = this.options.bar_selected_fill;
+            else if ( bar.hover)
+                ctx.fillStyle = this.options.bar_hover_fill;
             else if (bar.highlight)
                 ctx.fillStyle = this.options.bar_highlight_fill;
             else
@@ -198,87 +222,119 @@ MA 02111-1307, USA.
 
             ctx.fill();
 
-            if (drawAnnotation && bar.annotation != null) {
+            if (drawAnnotation && bar.annotation != null && bar.annotation.label != null) {
+                ctx.save();
+                ctx.translate(0, 0);
+                ctx.rotate( 270 * Math.PI / 180);
+                ctx.font = '7pt Arial';
+                ctx.textAlign = 'left';
+                ctx.fillStyle = this.options.text_color;
+                ctx.fillText(bar.annotation.label, -(this.options.height - this.max_bar_height - 4), bar.x - 2);
+                ctx.restore();
+
+                var text_width = ctx.measureText(bar.annotation.label).width;
+
                 ctx.lineWidth = .5;
                 ctx.strokeStyle = this.options.annotation_color;
-
-                var y = this.options.height - 120;
-
                 ctx.beginPath();
-                ctx.moveTo(bar.x + 1, bar.y);
-                ctx.lineTo(bar.x + 1, y);
-                ctx.lineTo(bar.x + 8, y);
+                ctx.moveTo(bar.x + .5, bar.y);
+                ctx.lineTo(bar.x + .5, (this.options.height-this.max_bar_height) - text_width );
                 ctx.stroke();
-
-                ctx.font = '8pt Arial';
-                ctx.textAlign = 'center';
-                ctx.fillStyle = this.options.text_color;
-                ctx.fillText(bar.annotation.annotation, bar.x + 20, y + 4);
-
-                // ctx.measureText(bar.annotation).width
-
             }
         },
 
-        _on_mouse_down: function ( event ) {
+        unselect_all: function () {
+            var ctx = this.canvas.get(0).getContext("2d");
+
+            for (var i = 0; i < this.bars.length; i++) {
+                if (this.bars[i].selected) {
+                    this.bars[i].selected = false;
+                    this._paint_bar(ctx, this.bars[i], false)
+                }
+            }
+        },
+
+        _cancel_event : function( event ) {
             if (event = (event || window.event)) {
                 if (event.stopPropagation != null)
                     event.stopPropagation();
                 else
                     event.cancelBubble = true;
             }
+        },
 
+        _get_bar: function( event ) {
             var canvas_x = event.clientX - Math.round(this.canvas.offset().left);
             var canvas_y = event.clientY - Math.round(this.canvas.offset().top);
 
             var bar_number = Math.floor( (canvas_x - this.EDGE_BORDER) / (this.BAR_BOX_WIDTH + this.BAR_BORDER_SIZE) );
 
             if (bar_number < 0 || bar_number >= this.bars.length)
-                return;
+                return null;
 
             var bar = this.bars[bar_number];
 
-            if (canvas_y < this.options.height - bar.height - this.BAR_BORDER_SIZE)
+            if (canvas_y < this.options.height - this.max_bar_height - this.BAR_BORDER_SIZE)
+                return null;
+            
+            return bar;
+        },
+
+        _on_mouse_down: function (event) {
+            this._cancel_event(event);
+
+            var bar = this._get_bar(event);
+            if (bar == null) {
+                this.unselect_all();
                 return;
+            }
 
-            if ( !bar.selected ) {
+            var selected = !bar.selected;
+
+            this.unselect_all();
+
+            if (selected) {
                 var ctx = this.canvas.get(0).getContext("2d");
-
-                for (var i = 0; i < this.bars.length; i++)
-                    if (this.bars[i].selected) {
-                        this.bars[i].selected = false;
-                        this._paint_bar(ctx, this.bars[i],false)
-                        break;
-                    }
-
                 bar.selected = true;
-
                 this._paint_bar(ctx, bar, false);
             }
 
             if (this.options.onclick != null)
-                this.options.onclick( event, bar_number );
+                this.options.onclick( event, bar );
         },
 
-        _on_mouse_over: function (event) {
-            if (event = (event || window.event)) {
-                if (event.stopPropagation != null)
-                    event.stopPropagation();
-                else
-                    event.cancelBubble = true;
+        _on_mouse_move: function (event) {
+            this._cancel_event(event);
+
+            var bar = this._get_bar(event);
+            if (bar == null) {
+                this._on_mouse_out(null);
+                return;
             }
 
-            /*
-            this.canvas.off("mouseup");
-            this.canvas.off("mousemove");
+            var ctx = this.canvas.get(0).getContext("2d");
 
-            this.canvas.get(0).releaseCapture();
+            for (var i = 0; i < this.bars.length; i++) {
+                var hover = i <= bar.number;
 
-            if (this.options.onchange && this.options.on_release_only)
-                this.options.onchange(this.get_location());
-            */
+                if (this.bars[i].hover != hover) {
+                    this.bars[i].hover = hover;
+                    this._paint_bar(ctx, this.bars[i], false);
+                }
+            }
+        },
 
-            return false;
+        _on_mouse_out: function( event ) {
+            this._cancel_event(event);
+
+            var ctx = this.canvas.get(0).getContext("2d");
+
+            for (var i = 0; i < this.bars.length; i++) {
+                if (this.bars[i].hover) {
+                    this.bars[i].hover = false;
+                    this._paint_bar(ctx, this.bars[i], false)
+                }
+            }
         },
 
         _setOption: function (key, value) {
