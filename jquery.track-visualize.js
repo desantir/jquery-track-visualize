@@ -25,38 +25,39 @@ MA 02111-1307, USA.
 
         pluginName: "track_visualize_control",
 
-        BAR_BORDER_SIZE: 1,
-        BAR_BOX_WIDTH: 2,
-        EDGE_BORDER: 2,
-
         options: {
-            onchange: null,
-            amplitude_data: [ 0 ],
-            height: 200,
-            min_width: 2000,
+            BAR_BORDER_SIZE: 1,
+            BAR_BOX_WIDTH: 2,
+            EDGE_BORDER: 2,
+
+            onplay: null,                   // Fired during "play" when annotation encountered
+            onclick: null,                  // Fired whern a bar is selected/unselected
+
+            amplitude_data: [],
+
+            min_width: 800,
+            bar_height_zoom: 1,
+
             bar_border_color: "rgb( 0, 0, 255 )",
-            bar_unselected_fill: "rgb( 0, 0, 150 )",
-            bar_highlight_fill: "rgb( 0, 111, 128)",
-            bar_selected_fill: "white",
-            bar_hover_fill: "rgb( 81, 81, 194 )",
+            bar_unselected_color: "rgb( 0, 0, 150 )",
+            bar_highlight_color: "rgb( 0, 111, 128)",
+            bar_selected_color: "white",
+            bar_hover_color: "rgb( 81, 81, 194 )",
             background_color: "transparent",
-            canvas_style: "overflow-x: auto;",
-            annotation_color: "white",
-            text_color: "white",
-            onclick: null,
-            play_callback: null,
-            zoom_percent: .75
+            annotation_line_color: "white",
+            annotation_text_color: "white",
+
+            no_data_message: "NO AMPLITUDE DATA"
         },
 
         // Widget constructor (access with this.element)
         _create: function () {
-            var canvas_tag = '<canvas id="track_visualize_canvas" style="' + this.options.canvas_style + '"></canvas>';
+            this.play_duration_ms = 0;
+
+            var canvas_tag = '<canvas id="track_visualize_canvas" style="overflow-x: auto;"></canvas>';
             this.canvas = $(canvas_tag);
 
-            this.canvas.attr({ height: this.options.height, width: this.options.min_width });
-            this.canvas.height(this.options.height);
-
-            this.container = $( '<div style="overflow-x: auto; overflow-y: hidden; background-color:transparent; width:100%; height:100%"></div>' );
+            this.container = $( '<div style="overflow-x: auto; overflow-y: hidden; background-color: transparent; width:100%; height:100%"></div>' );
             this.canvas.appendTo(this.container);
             this.container.appendTo(this.element);
 
@@ -71,36 +72,46 @@ MA 02111-1307, USA.
         },
 
         load: function (amplitude_data) {
-            if (amplitude_data == null)
-                return;
-
             this.options.amplitude_data = amplitude_data;
 
             this.container.scrollLeft(0);
-
-            this.canvasWidth = Math.max( amplitude_data.length * (this.BAR_BOX_WIDTH + this.BAR_BORDER_SIZE) + (this.EDGE_BORDER * 2), this.options.min_width );
-
             this.bars = [];
             this.max_bar_height = 0;
+            this.options.height = this.element.height();
 
-            var x = this.EDGE_BORDER;
+            if (amplitude_data == null || amplitude_data.length == 0) {
+                this.canvasWidth = Math.max( 800, this.container.width() );
+            }
+            else {
+                this.canvasWidth = Math.max( (amplitude_data.length *
+                        (this.options.BAR_BOX_WIDTH + this.options.BAR_BORDER_SIZE)) + (this.options.EDGE_BORDER * 2), this.options.min_width);
 
-            for (var i = 0; i < this.options.amplitude_data.length; i++) {
-                var bar_height = ((this.options.amplitude_data[i] / 32767.0) * 100) * this.options.zoom_percent;
-                var y = this.options.height - bar_height - this.BAR_BORDER_SIZE;
+                if ( this.canvasWidth >= this.element.width() )
+                    this.options.height -= 20;
 
-                this.bars[this.bars.length] = {
-                    "number" : i,
-                    "x": x, "y": y, "height": bar_height,
-                    "highlight": false, "selected": false, hover: false, "annotation": null
-                };
+                var x = this.options.EDGE_BORDER;
 
-                x += (this.BAR_BOX_WIDTH + this.BAR_BORDER_SIZE);         // Borders overlap - hence 1 border
+                for (var i = 0; i < this.options.amplitude_data.length; i++) {
+                    var bar_height = ((this.options.amplitude_data[i] / 32767.0) * 100) * this.options.bar_height_zoom;
+                    var y = this.options.height - bar_height - this.options.BAR_BORDER_SIZE;
 
-                if (bar_height > this.max_bar_height+4)
-                    this.max_bar_height = bar_height+4;
+                    this.bars[this.bars.length] = {
+                        "number": i,
+                        "x": x, "y": y, "height": bar_height,
+                        "highlight": false, "selected": false, hover: false, "annotation": null
+                    };
+
+                    x += (this.options.BAR_BOX_WIDTH + this.options.BAR_BORDER_SIZE);         // Borders overlap - hence 1 border
+
+                    if (bar_height > this.max_bar_height + 4)
+                        this.max_bar_height = bar_height + 4;
+                }
             }
 
+            this.canvas.attr({ height: this.options.height, width: this.options.min_width });
+            this.canvas.height(this.options.height);
+
+            this.container.hide().show(0);
             this.draw();
         },
 
@@ -111,37 +122,56 @@ MA 02111-1307, USA.
             var ctx = this.canvas.get(0).getContext("2d");
 
             ctx.beginPath();
-            ctx.fillStyle = this.options.background_color;
+
             ctx.lineWidth = 0;
+            ctx.fillStyle = this.options.background_color;
             ctx.rect(0, 0, this.canvasWidth, this.options.height);
+            ctx.stroke();
             ctx.fill();
             ctx.closePath();
 
-            for (var y = 0; y < 2; y++ )
-                for (var i = 0; i < this.bars.length; i++)
-                    this._paint_bar(ctx, this.bars[i], true);
+            if (this.bars.length == 0) {
+                ctx.font = '42pt Arial';
+                ctx.textAlign = 'left';
+                ctx.fillStyle = "grey";
+                ctx.fillText(this.options.no_data_message, 10, this.options.height/2 + 20 );
+            }
+            else {
+                for (var y = 0; y < 2; y++)
+                    for (var i = 0; i < this.bars.length; i++)
+                        this._paint_bar(ctx, this.bars[i], true);
+            }
         },
 
         play: function (start_bar, interval_ms) {
             this.stop();
 
-            this.highlightLeft( this.bars.length, false );
-            if ( start_bar > 0 )
-                this.highlightLeft( start_bar-1, true );
+            this.clearHighlight();
+            if (start_bar > 0) {
+                this.highlightLeft(start_bar, true);
+                this.play_duration_ms = start_bar * interval_ms;
+            }
+            else
+                this.play_duration_ms = 0;
 
             this._timer( start_bar, interval_ms );
          },
 
         _timer: function( index, interval_ms ) {
+            if ( index >= this.bars.length )
+                return;
+
+            this.play_duration_ms += interval_ms;
+
             this.highlight( [ index ], true );
 
             var bar = this.bars[index];
 
-            if (this.play_callback != null && bar.annotation != null)
-                this.play_callback(bar);
+            if (this.options.onplay != null)
+                this.options.onplay(1, bar, this.play_duration_ms);
 
             if (this.canvas.width() > this.container.width() &&
-                bar.x >= this.container.width() + this.container.scrollLeft() - (this.BAR_BOX_WIDTH + this.BAR_BORDER_SIZE) ) {
+                bar.x >= this.container.width() + this.container.scrollLeft() - (this.options.BAR_BOX_WIDTH + this.options.BAR_BORDER_SIZE)) {
                 this.container.scrollLeft( bar.x - this.container.width()/2 ) ; 
             }
 
@@ -151,6 +181,9 @@ MA 02111-1307, USA.
                     self._timer( index, interval_ms );
                 }, interval_ms );
             }
+            else
+                if (this.options.onplay != null)
+                    this.options.onplay(2, null, this.play_duration_ms);
         },
 
         stop: function ( ) {
@@ -158,6 +191,10 @@ MA 02111-1307, USA.
                 clearTimeout( this.auto_timer );
                 this.auto_timer = null;
             }
+        },
+
+        getPlayDuration: function() {
+            return this.play_duration_ms;
         },
 
         highlight: function( bar_list, highlight ) {
@@ -178,6 +215,10 @@ MA 02111-1307, USA.
                 bar.highlight = highlight;
                 this._paint_bar(ctx, bar, false);
             }
+        },
+
+        clearHighlight: function () {
+            this.highlightLeft(this.bars.length, false);
         },
 
         highlightLeft: function (num_bars, highlight) {
@@ -206,19 +247,19 @@ MA 02111-1307, USA.
 
         _paint_bar: function( ctx, bar, drawAnnotation ) {
             ctx.beginPath();
-            ctx.lineWidth = this.BAR_BORDER_SIZE;
+            ctx.lineWidth = this.options.BAR_BORDER_SIZE;
             ctx.strokeStyle = this.options.bar_border_color;
-            ctx.rect(bar.x, bar.y, this.BAR_BOX_WIDTH, bar.height);
+            ctx.rect(bar.x, bar.y, this.options.BAR_BOX_WIDTH, bar.height);
             ctx.stroke();
 
             if (bar.selected)
-                ctx.fillStyle = this.options.bar_selected_fill;
+                ctx.fillStyle = this.options.bar_selected_color;
             else if ( bar.hover)
-                ctx.fillStyle = this.options.bar_hover_fill;
+                ctx.fillStyle = this.options.bar_hover_color;
             else if (bar.highlight)
-                ctx.fillStyle = this.options.bar_highlight_fill;
+                ctx.fillStyle = this.options.bar_highlight_color;
             else
-                ctx.fillStyle = this.options.bar_unselected_fill;
+                ctx.fillStyle = this.options.bar_unselected_color;
 
             ctx.fill();
 
@@ -228,14 +269,14 @@ MA 02111-1307, USA.
                 ctx.rotate( 270 * Math.PI / 180);
                 ctx.font = '7pt Arial';
                 ctx.textAlign = 'left';
-                ctx.fillStyle = this.options.text_color;
+                ctx.fillStyle = this.options.annotation_text_color;
                 ctx.fillText(bar.annotation.label, -(this.options.height - this.max_bar_height - 4), bar.x - 2);
                 ctx.restore();
 
                 var text_width = ctx.measureText(bar.annotation.label).width;
 
                 ctx.lineWidth = .5;
-                ctx.strokeStyle = this.options.annotation_color;
+                ctx.strokeStyle = this.options.annotation_line_color;
                 ctx.beginPath();
                 ctx.moveTo(bar.x + .5, bar.y);
                 ctx.lineTo(bar.x + .5, (this.options.height-this.max_bar_height) - text_width );
@@ -267,14 +308,14 @@ MA 02111-1307, USA.
             var canvas_x = event.clientX - Math.round(this.canvas.offset().left);
             var canvas_y = event.clientY - Math.round(this.canvas.offset().top);
 
-            var bar_number = Math.floor( (canvas_x - this.EDGE_BORDER) / (this.BAR_BOX_WIDTH + this.BAR_BORDER_SIZE) );
+            var bar_number = Math.floor((canvas_x - this.options.EDGE_BORDER) / (this.options.BAR_BOX_WIDTH + this.options.BAR_BORDER_SIZE));
 
             if (bar_number < 0 || bar_number >= this.bars.length)
                 return null;
 
             var bar = this.bars[bar_number];
 
-            if (canvas_y < this.options.height - this.max_bar_height - this.BAR_BORDER_SIZE)
+            if (canvas_y < this.options.height - this.max_bar_height - this.options.BAR_BORDER_SIZE)
                 return null;
             
             return bar;
@@ -340,7 +381,7 @@ MA 02111-1307, USA.
         _setOption: function (key, value) {
             this.options[key] = value;
             $.Widget.prototype._setOption.apply(this, arguments);
-            this._draw();
+            this.draw();
         }
     });
 
