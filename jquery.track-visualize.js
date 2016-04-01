@@ -34,6 +34,7 @@ MA 02111-1307, USA.
             onclick: null,                  // Fired whern a bar is selected/unselected
 
             amplitude_data: [],
+            interval_ms: 500,
 
             min_width: 800,
             bar_height_zoom: 1,
@@ -54,12 +55,15 @@ MA 02111-1307, USA.
         _create: function () {
             this.play_duration_ms = 0;
 
+            this.positionDiv = $( '<div style="display: none; position:absolute; left:10px; top:10px; font:24pt arial; background-color: transparent; color:' + this.options.bar_hover_color + '; z-index: 100;">foo</div>' );
+
             var canvas_tag = '<canvas id="track_visualize_canvas" style="overflow-x: auto;"></canvas>';
             this.canvas = $(canvas_tag);
 
-            this.container = $( '<div style="overflow-x: auto; overflow-y: hidden; background-color: transparent; width:100%; height:100%"></div>' );
+            this.container = $( '<div style="overflow-x: auto; overflow-y: hidden; background-color: transparent; width:100%; height:100%; position:relative;"></div>' );
             this.canvas.appendTo(this.container);
             this.container.appendTo(this.element);
+            this.positionDiv.appendTo( this.container );
 
             var self = this;
             this.canvas.on("mousedown", function (event) { self._on_mouse_down(event); });
@@ -71,8 +75,9 @@ MA 02111-1307, USA.
             this.load(this.options.amplitude_data);
         },
 
-        load: function (amplitude_data) {
+        load: function ( amplitude_data, interval_ms ) {
             this.options.amplitude_data = amplitude_data;
+            this.options.interval_ms = interval_ms;
 
             this.container.scrollLeft(0);
             this.bars = [];
@@ -143,32 +148,36 @@ MA 02111-1307, USA.
             }
         },
 
-        play: function (start_bar, interval_ms) {
+        play: function ( start_ms ) {
             this.stop();
-
             this.clearHighlight();
+
+            var start_bar = (start_ms == 0 ) ? 0 : Math.round( start_ms / this.options.interval_ms );
+
             if (start_bar > 0) {
                 this.highlightLeft(start_bar, true);
-                this.play_duration_ms = start_bar * interval_ms;
+                this.play_duration_ms = start_bar * this.options.interval_ms;
             }
             else
                 this.play_duration_ms = 0;
 
-            this._timer( start_bar, interval_ms );
+            this._timer( start_bar );
          },
 
-        _timer: function( index, interval_ms ) {
+        _timer: function( index ) {
             if ( index >= this.bars.length )
                 return;
 
-            this.play_duration_ms += interval_ms;
+            this.play_duration_ms += this.options.interval_ms;
 
             this.highlight( [ index ], true );
 
             var bar = this.bars[index];
 
-            if (this.options.onplay != null)
-                this.options.onplay(1, bar, this.play_duration_ms);
+            if (this.options.onplay != null) {
+                if ( this.options.onplay(1, bar, this.play_duration_ms) )
+                    return;
+            }
 
             if (this.canvas.width() > this.container.width() &&
                 bar.x >= this.container.width() + this.container.scrollLeft() - (this.options.BAR_BOX_WIDTH + this.options.BAR_BORDER_SIZE)) {
@@ -178,8 +187,8 @@ MA 02111-1307, USA.
             if ( ++index < this.bars.length ) {
                 var self = this;
                 this.auto_timer = setTimeout( function() {
-                    self._timer( index, interval_ms );
-                }, interval_ms );
+                    self._timer( index );
+                }, this.options.interval_ms );
             }
             else
                 if (this.options.onplay != null)
@@ -245,6 +254,17 @@ MA 02111-1307, USA.
             this.draw();
         },
 
+        clearAnnotation: function ( bar_number ) {
+            if (bar_number < 0 || bar_number >= this.bars.length)
+                return;
+
+            var ctx = this.canvas.get(0).getContext("2d");
+
+            var bar = this.bars[bar_number];
+            bar.annotation = null;
+            this.draw();
+        },
+
         _paint_bar: function( ctx, bar, drawAnnotation ) {
             ctx.beginPath();
             ctx.lineWidth = this.options.BAR_BORDER_SIZE;
@@ -284,7 +304,11 @@ MA 02111-1307, USA.
             }
         },
 
-        unselect_all: function () {
+        getBarData: function() {
+            return this.bars;
+        },
+
+        unselectAll: function () {
             var ctx = this.canvas.get(0).getContext("2d");
 
             for (var i = 0; i < this.bars.length; i++) {
@@ -305,8 +329,8 @@ MA 02111-1307, USA.
         },
 
         _get_bar: function( event ) {
-            var canvas_x = event.clientX - Math.round(this.canvas.offset().left);
-            var canvas_y = event.clientY - Math.round(this.canvas.offset().top);
+            var canvas_x = $(window).scrollLeft() + event.clientX - Math.round(this.canvas.offset().left);
+            var canvas_y = $(window).scrollTop() + event.clientY - Math.round(this.canvas.offset().top);
 
             var bar_number = Math.floor((canvas_x - this.options.EDGE_BORDER) / (this.options.BAR_BOX_WIDTH + this.options.BAR_BORDER_SIZE));
 
@@ -326,18 +350,18 @@ MA 02111-1307, USA.
 
             var bar = this._get_bar(event);
             if (bar == null) {
-                this.unselect_all();
-                return;
+                this.unselectAll();
             }
+            else {
+                var selected = !bar.selected;
 
-            var selected = !bar.selected;
+                this.unselectAll();
 
-            this.unselect_all();
-
-            if (selected) {
-                var ctx = this.canvas.get(0).getContext("2d");
-                bar.selected = true;
-                this._paint_bar(ctx, bar, false);
+                if (selected) {
+                    var ctx = this.canvas.get(0).getContext("2d");
+                    bar.selected = true;
+                    this._paint_bar(ctx, bar, false);
+                }
             }
 
             if (this.options.onclick != null)
@@ -363,6 +387,20 @@ MA 02111-1307, USA.
                     this._paint_bar(ctx, this.bars[i], false);
                 }
             }
+
+            if ( this.positionTimer != null )
+                clearTimeout( this.positionTimer );
+
+            var self = this;
+            this.positionTimer = setTimeout( function () {
+                self._update_position( bar.number )
+            }, 1 );
+        },
+
+        _update_position: function( bar_number ) {
+            this.positionDiv.css( 'left', this.container.scrollLeft() + this.options.EDGE_BORDER );
+            this.positionDiv.text( this._tracktime( bar_number * this.options.interval_ms ) );
+            this.positionDiv.show();
         },
 
         _on_mouse_out: function( event ) {
@@ -376,6 +414,30 @@ MA 02111-1307, USA.
                     this._paint_bar(ctx, this.bars[i], false)
                 }
             }
+
+            if ( this.positionTimer != null )
+                clearTimeout( this.positionTimer );
+
+            this.positionDiv.hide();
+        },
+
+        _tracktime: function( time ) {
+            var track_time = "";
+
+            var minutes = Math.floor(time / (60 * 1000));
+            time -= minutes * (60 * 1000);
+            var seconds = Math.floor(time / (1000));
+            time -= seconds * 1000;
+            var frac = time / 100;
+
+            track_time = minutes + ":";
+            if (seconds < 10)
+                track_time += "0"
+
+            track_time += seconds;
+            track_time += "." + frac;
+
+            return track_time;
         },
 
         _setOption: function (key, value) {
