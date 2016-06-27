@@ -1,0 +1,28 @@
+{
+  "name": "jquery-track-visualize",
+  "version": "1.0.0",
+  "description": "Amplitude visualization with annotations, automated run annimation, and events",
+  "main": "jquery.track-visualize.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/desantir/jquery-track-visualize.git"
+  },
+  "keywords": [
+    "jquery-plugin",
+    "ecosystem:jquery",
+    "visualize",
+    "music",
+    "song",
+    "amplitude",
+    "chart"
+  ],
+  "author": "Bobby DeSantis",
+  "license": "GPL-3.0",
+  "bugs": {
+    "url": "https://github.com/desantir/jquery-track-visualize/issues"
+  },
+  "homepage": "https://github.com/desantir/jquery-track-visualize#readme"
+}
