@@ -1,7 +1,7 @@
 {
   "name": "jquery-track-visualize",
   "version": "1.0.0",
-  "description": "Amplitude visualization with annotations, automated run annimation, and events",
+  "description": "Amplitude visualization with annotations, automated run animation, and events",
   "main": "jquery.track-visualize.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"

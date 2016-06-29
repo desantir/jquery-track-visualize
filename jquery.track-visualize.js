@@ -126,14 +126,8 @@ MA 02111-1307, USA.
 
             var ctx = this.canvas.get(0).getContext("2d");
 
-            ctx.beginPath();
-
-            ctx.lineWidth = 0;
             ctx.fillStyle = this.options.background_color;
-            ctx.rect(0, 0, this.canvasWidth, this.options.height);
-            ctx.stroke();
-            ctx.fill();
-            ctx.closePath();
+            ctx.fillRect(0, 0, this.canvasWidth, this.options.height);
 
             if (this.bars.length == 0) {
                 ctx.font = '42pt Arial';
@@ -142,9 +136,8 @@ MA 02111-1307, USA.
                 ctx.fillText(this.options.no_data_message, 10, this.options.height/2 + 20 );
             }
             else {
-                for (var y = 0; y < 2; y++)
-                    for (var i = 0; i < this.bars.length; i++)
-                        this._paint_bar(ctx, this.bars[i], true);
+                for (var i = 0; i < this.bars.length; i++)
+                    this._paint_bar(ctx, this.bars[i], true);
             }
         },
 
@@ -282,6 +275,7 @@ MA 02111-1307, USA.
                 ctx.fillStyle = this.options.bar_unselected_color;
 
             ctx.fill();
+            ctx.closePath();
 
             if (drawAnnotation && bar.annotation != null && bar.annotation.label != null) {
                 ctx.save();
@@ -293,14 +287,22 @@ MA 02111-1307, USA.
                 ctx.fillText(bar.annotation.label, -(this.options.height - this.max_bar_height - 4), bar.x - 2);
                 ctx.restore();
 
-                var text_width = ctx.measureText(bar.annotation.label).width;
+                var text_height = ctx.measureText(bar.annotation.label).width;
+                var text_width = ctx.measureText('M').width;   // Just an approximation
+
+                bar.annotation.textbox = {
+                    "top": (this.options.height-this.max_bar_height) - text_height - 4, 
+                    "left": bar.x-text_width, 
+                    "height": text_height, 
+                    "width": text_width+1 };  // +1 for the line
 
                 ctx.lineWidth = .5;
                 ctx.strokeStyle = this.options.annotation_line_color;
                 ctx.beginPath();
                 ctx.moveTo(bar.x + .5, bar.y);
-                ctx.lineTo(bar.x + .5, (this.options.height-this.max_bar_height) - text_width );
+                ctx.lineTo(bar.x + .5, (this.options.height-this.max_bar_height) - text_height );
                 ctx.stroke();
+                ctx.closePath();
             }
         },
 
@@ -332,17 +334,28 @@ MA 02111-1307, USA.
             var canvas_x = $(window).scrollLeft() + event.clientX - Math.round(this.canvas.offset().left);
             var canvas_y = $(window).scrollTop() + event.clientY - Math.round(this.canvas.offset().top);
 
+            if (canvas_y < this.options.height - this.max_bar_height - this.options.BAR_BORDER_SIZE) {
+                // See if the hit is any a bar's annotation box
+                for (var i = 0; i < this.bars.length; i++) {
+                    var bar = this.bars[i];
+                    if ( bar.annotation == null || bar.annotation.textbox == null )
+                        continue;
+
+                    var box = bar.annotation.textbox;
+                    if ( canvas_x >= box.left && canvas_x < box.left+box.width && 
+                         canvas_y >= box.top && canvas_y < box.top+box.height )
+                        return bar;
+                }
+
+                return null;
+            }
+
             var bar_number = Math.floor((canvas_x - this.options.EDGE_BORDER) / (this.options.BAR_BOX_WIDTH + this.options.BAR_BORDER_SIZE));
 
             if (bar_number < 0 || bar_number >= this.bars.length)
                 return null;
 
-            var bar = this.bars[bar_number];
-
-            if (canvas_y < this.options.height - this.max_bar_height - this.options.BAR_BORDER_SIZE)
-                return null;
-            
-            return bar;
+            return this.bars[bar_number];
         },
 
         _on_mouse_down: function (event) {
