@@ -72,23 +72,38 @@ MA 02111-1307, USA.
         },
 
         _init: function () {
-            this.load(this.options.amplitude_data);
+            this.load( this.options.amplitude_data, this.options.interval_ms );
         },
 
         load: function ( amplitude_data, interval_ms ) {
             this.options.amplitude_data = amplitude_data;
             this.options.interval_ms = interval_ms;
 
-            this.container.scrollLeft(0);
             this.bars = [];
+
+            if (amplitude_data != null && amplitude_data.length > 0) {
+                for (var i = 0; i < this.options.amplitude_data.length; i++) {
+                    this.bars[this.bars.length] = {
+                        "number": i,
+                        "x": 0, "y": 0, "height": 0,
+                        "highlight": false, "selected": false, hover: false, "annotation": null
+                    };
+                }
+            }
+
+            this.resize();
+        },
+
+        resize: function () {
+            this.container.scrollLeft(0);
             this.max_bar_height = 0;
             this.options.height = this.element.height();
 
-            if (amplitude_data == null || amplitude_data.length == 0) {
-                this.canvasWidth = Math.max( 800, this.container.width() );
+            if ( this.options.amplitude_data == null || this.options.amplitude_data.length == 0) {
+                this.canvasWidth = Math.max( this.options.min_width, this.container.width() );
             }
             else {
-                this.canvasWidth = Math.max( (amplitude_data.length *
+                this.canvasWidth = Math.max( (this.options.amplitude_data.length *
                         (this.options.BAR_BOX_WIDTH + this.options.BAR_BORDER_SIZE)) + (this.options.EDGE_BORDER * 2), this.options.min_width);
 
                 if ( this.canvasWidth >= this.element.width() )
@@ -96,20 +111,18 @@ MA 02111-1307, USA.
 
                 var x = this.options.EDGE_BORDER;
 
-                for (var i = 0; i < this.options.amplitude_data.length; i++) {
-                    var bar_height = ((this.options.amplitude_data[i] / 32767.0) * 100) * this.options.bar_height_zoom;
-                    var y = this.options.height - bar_height - this.options.BAR_BORDER_SIZE;
+                for (var i = 0; i < this.bars.length; i++) {
+                    var height = ((this.options.amplitude_data[i] / 32767.0) * 100) * this.options.bar_height_zoom;
+                    var y = this.options.height - height - this.options.BAR_BORDER_SIZE;
 
-                    this.bars[this.bars.length] = {
-                        "number": i,
-                        "x": x, "y": y, "height": bar_height,
-                        "highlight": false, "selected": false, hover: false, "annotation": null
-                    };
+                    this.bars[i].x = x;
+                    this.bars[i].y = y;
+                    this.bars[i].height = height;
 
                     x += (this.options.BAR_BOX_WIDTH + this.options.BAR_BORDER_SIZE);         // Borders overlap - hence 1 border
 
-                    if (bar_height > this.max_bar_height + 4)
-                        this.max_bar_height = bar_height + 4;
+                    if (height > this.max_bar_height + 4)
+                        this.max_bar_height = height + 4;
                 }
             }
 
@@ -456,7 +469,7 @@ MA 02111-1307, USA.
         _setOption: function (key, value) {
             this.options[key] = value;
             $.Widget.prototype._setOption.apply(this, arguments);
-            this.draw();
+            this.resize();
         }
     });
 
