@@ -149,8 +149,12 @@ MA 02111-1307, USA.
                 ctx.fillText(this.options.no_data_message, 10, this.options.height/2 + 20 );
             }
             else {
-                for (var i = 0; i < this.bars.length; i++)
-                    this._paint_bar(ctx, this.bars[i], true);
+                // HACK! Paint bars multiple times to avoid hover changing the colors. Need
+                // to figure out why this is happening as the effect is not desired.
+
+                for ( var y=0; y < 3; y++ )
+                    for (var i = 0; i < this.bars.length; i++)
+                        this._paint_bar(ctx, this.bars[i], true);
             }
         },
 
@@ -291,13 +295,16 @@ MA 02111-1307, USA.
             ctx.closePath();
 
             if (drawAnnotation && bar.annotation != null && bar.annotation.label != null) {
+
+                var bar_width = this.options.BAR_BOX_WIDTH + this.options.BAR_BORDER_SIZE;
+
                 ctx.save();
                 ctx.translate(0, 0);
                 ctx.rotate( 270 * Math.PI / 180);
                 ctx.font = '7pt Arial';
                 ctx.textAlign = 'left';
                 ctx.fillStyle = this.options.annotation_text_color;
-                ctx.fillText(bar.annotation.label, -(this.options.height - this.max_bar_height - 4), bar.x - 2);
+                ctx.fillText(bar.annotation.label, -(this.options.height - this.max_bar_height - 4), bar.x + bar_width/2 - 2);
                 ctx.restore();
 
                 var text_height = ctx.measureText(bar.annotation.label).width;
@@ -305,15 +312,15 @@ MA 02111-1307, USA.
 
                 bar.annotation.textbox = {
                     "top": (this.options.height-this.max_bar_height) - text_height - 4, 
-                    "left": bar.x-text_width, 
+                    "left": bar.x+bar_width/2-2-text_width, 
                     "height": text_height, 
-                    "width": text_width+1 };  // +1 for the line
+                    "width": text_width+2 };  // +2 for the line
 
-                ctx.lineWidth = .5;
+                ctx.lineWidth = 1;
                 ctx.strokeStyle = this.options.annotation_line_color;
                 ctx.beginPath();
-                ctx.moveTo(bar.x + .5, bar.y);
-                ctx.lineTo(bar.x + .5, (this.options.height-this.max_bar_height) - text_height );
+                ctx.moveTo(bar.x + bar_width/2, bar.y);
+                ctx.lineTo(bar.x + bar_width/2, (this.options.height-this.max_bar_height) - text_height );
                 ctx.stroke();
                 ctx.closePath();
             }
